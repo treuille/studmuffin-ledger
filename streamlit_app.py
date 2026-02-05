@@ -1,21 +1,23 @@
 # streamlit_app.py
 #
-# The Land — Month-End Workflow (Skeleton)
+# The Land — Month-End Workflow
 #
 # Design goals:
 # - Single-page, top-to-bottom guided checklist
-# - Very little session state (only active_step)
-# - No-op actions for now
+# - Password-protected secrets (encrypted at rest, decrypted transiently)
 # - Content is driven entirely by workflow_steps.md
 #
 # Pages:
 # - Workflow (guided steps)
-# - Config / Debug (placeholder for secrets, logs, connections)
+# - Config (secrets management)
 
 from pathlib import Path
 from dataclasses import dataclass
+import json
 import re
 import streamlit as st
+
+from secrets_manager import encrypt_secrets, try_decrypt_secrets
 
 WORKFLOW_MD = Path(__file__).parent / "workflow_steps.md"
 
@@ -71,6 +73,14 @@ def parse_steps(md: str):
     return intro, steps
 
 
+def get_encrypted_blob() -> str | None:
+    """Get the encrypted secrets blob from st.secrets or return None."""
+    try:
+        return st.secrets.get("encrypted_secrets")
+    except Exception:
+        return None
+
+
 def workflow_page(intro, steps):
     st.title("The Land — Month-End Workflow")
 
@@ -85,15 +95,8 @@ def workflow_page(intro, steps):
         is_active = step.number == st.session_state.active_step
         is_future = step.number > st.session_state.active_step
 
-        # Step header
-        if is_active:
-            st.subheader(f"Step {step.number}: {step.title}")
-        elif is_future:
-            st.subheader(f"Step {step.number}: {step.title}")
-        else:
-            st.subheader(f"Step {step.number}: {step.title}")
+        st.subheader(f"Step {step.number}: {step.title}")
 
-        # Step body
         if is_active:
             st.markdown(step.body)
             st.button(
@@ -116,40 +119,154 @@ def workflow_page(intro, steps):
 
 
 def config_page():
-    st.title("Config / Debug")
+    st.title("Config")
+
+    blob = get_encrypted_blob()
+    has_secrets = bool(blob)
 
     st.markdown(
         """
-This page is intentionally minimal for now.
-
-Later, this is where we will show:
-- Which secrets are present
-- Whether OAuth connections succeed
-- Token expiry / refresh status
-- Logs from each step
+Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encrypt.
 """
     )
 
-    st.subheader("Session state (debug)")
-    st.json(
-        {
-            "active_step": st.session_state.get("active_step"),
-        }
+    # Initialize form state
+    if "decrypted_secrets" not in st.session_state:
+        st.session_state.decrypted_secrets = None
+    if "decrypt_error" not in st.session_state:
+        st.session_state.decrypt_error = None
+
+    # Decrypt section (only if blob exists)
+    if has_secrets and st.session_state.decrypted_secrets is None:
+        st.subheader("Decrypt Existing Secrets")
+
+        with st.form("decrypt_form"):
+            decrypt_password = st.text_input("Current Password", type="password")
+            if st.form_submit_button("Decrypt"):
+                secrets, error = try_decrypt_secrets(blob, decrypt_password)
+                if secrets is not None:
+                    st.session_state.decrypted_secrets = secrets
+                    st.session_state.decrypt_error = None
+                    st.rerun()
+                else:
+                    st.session_state.decrypt_error = error
+
+        if st.session_state.decrypt_error:
+            st.error(st.session_state.decrypt_error)
+
+        st.divider()
+        st.markdown("**Or start fresh:**")
+
+    # Edit section
+    st.subheader("Edit Secrets")
+
+    # Use decrypted secrets as defaults, or empty
+    current = st.session_state.decrypted_secrets or {}
+
+    qbo_client_id = st.text_input(
+        "QuickBooks Client ID",
+        value=current.get("qbo_client_id", ""),
+        key="qbo_client_id",
     )
+
+    qbo_client_secret = st.text_input(
+        "QuickBooks Client Secret",
+        value=current.get("qbo_client_secret", ""),
+        type="password",
+        key="qbo_client_secret",
+    )
+
+    st.markdown("**Google Service Account JSON**")
+    google_sa_default = ""
+    if current.get("google_service_account"):
+        google_sa_default = json.dumps(current["google_service_account"], indent=2)
+
+    google_sa_input = st.text_area(
+        "Paste the full JSON content",
+        value=google_sa_default,
+        height=150,
+        key="google_sa",
+    )
+
+    st.divider()
+
+    st.subheader("Encrypt with Password")
+
+    new_password = st.text_input(
+        "Password",
+        type="password",
+        key="new_password",
+        help="This password will be required to decrypt secrets later",
+    )
+    confirm_password = st.text_input(
+        "Confirm Password",
+        type="password",
+        key="confirm_password",
+    )
+
+    if st.button("Encrypt & Generate Blob", type="primary"):
+        errors = []
+
+        if not new_password:
+            errors.append("Password is required.")
+        elif new_password != confirm_password:
+            errors.append("Passwords do not match.")
+        elif len(new_password) < 8:
+            errors.append("Password must be at least 8 characters.")
+
+        # Parse Google SA JSON
+        google_sa = None
+        if google_sa_input.strip():
+            try:
+                google_sa = json.loads(google_sa_input)
+            except json.JSONDecodeError as e:
+                errors.append(f"Invalid Google SA JSON: {e}")
+
+        if errors:
+            for error in errors:
+                st.error(error)
+        else:
+            # Build secrets dict
+            new_secrets = {}
+            if qbo_client_id:
+                new_secrets["qbo_client_id"] = qbo_client_id
+            if qbo_client_secret:
+                new_secrets["qbo_client_secret"] = qbo_client_secret
+            if google_sa:
+                new_secrets["google_service_account"] = google_sa
+
+            # Encrypt (even if empty - user might want to clear secrets)
+            encrypted = encrypt_secrets(new_secrets, new_password)
+
+            st.success("Secrets encrypted!")
+
+            st.markdown("**Copy this into your secrets.toml or Community Cloud secrets:**")
+            st.code(f'encrypted_secrets = "{encrypted}"', language="toml")
+
+            # Clear decrypted state
+            st.session_state.decrypted_secrets = None
+
+    # Debug section
+    with st.expander("Debug Info"):
+        st.json({
+            "has_encrypted_blob": has_secrets,
+            "secrets_decrypted": st.session_state.decrypted_secrets is not None,
+            "active_step": st.session_state.get("active_step"),
+        })
 
 
 def main():
-    st.set_page_config(layout="wide")
+    st.set_page_config(page_title="The Land — Month-End", layout="wide")
+
+    page = st.sidebar.radio("Page", ["Workflow", "Config"])
 
     md = load_markdown()
     intro, steps = parse_steps(md)
 
-    page = st.sidebar.radio("Page", ["Workflow", "Config / Debug"])
-
-    if page == "Workflow":
-        workflow_page(intro, steps)
-    else:
+    if page == "Config":
         config_page()
+    else:
+        workflow_page(intro, steps)
 
 
 if __name__ == "__main__":
