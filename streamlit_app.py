@@ -11,11 +11,16 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 import re
+import time
 import streamlit as st
 
 from secrets_manager import encrypt_secrets, try_decrypt_secrets
 
 WORKFLOW_MD = Path(__file__).parent / "workflow_steps.md"
+
+# Security settings
+SESSION_TIMEOUT_SECONDS = 30 * 60  # 30 minutes of inactivity
+LOCKOUT_DELAYS = [0, 0, 5, 15, 30, 60]  # Escalating delays after failed attempts
 
 # Icons for each step (Material icons)
 STEP_ICONS = {
@@ -98,10 +103,62 @@ def get_encrypted_blob() -> str | None:
         return None
 
 
+def _check_session_timeout() -> bool:
+    """Check if session has timed out. Returns True if still valid."""
+    last_activity = st.session_state.get("last_activity")
+    if last_activity is None:
+        return True  # No activity yet, consider valid
+
+    elapsed = time.time() - last_activity
+    if elapsed > SESSION_TIMEOUT_SECONDS:
+        # Session expired - clear secrets
+        st.session_state.pop("secrets", None)
+        st.session_state.pop("last_activity", None)
+        return False
+    return True
+
+
+def _update_activity():
+    """Update last activity timestamp."""
+    st.session_state.last_activity = time.time()
+
+
+def _get_lockout_remaining() -> float:
+    """Get seconds remaining in lockout, or 0 if not locked out."""
+    lockout_until = st.session_state.get("lockout_until", 0)
+    remaining = lockout_until - time.time()
+    return max(0, remaining)
+
+
+def _record_failed_attempt():
+    """Record a failed login attempt and set lockout if needed."""
+    attempts = st.session_state.get("failed_attempts", 0) + 1
+    st.session_state.failed_attempts = attempts
+
+    # Determine lockout duration based on attempt count
+    delay_index = min(attempts, len(LOCKOUT_DELAYS) - 1)
+    delay = LOCKOUT_DELAYS[delay_index]
+
+    if delay > 0:
+        st.session_state.lockout_until = time.time() + delay
+
+
+def _clear_failed_attempts():
+    """Clear failed attempt tracking after successful login."""
+    st.session_state.pop("failed_attempts", None)
+    st.session_state.pop("lockout_until", None)
+
+
 def unlock_gate():
     """
     Password gate. Shows only a password field, nothing else.
     Returns True if unlocked, False if still locked.
+
+    Security features:
+    - Password is never stored in session state
+    - Unlocked state = presence of decrypted secrets
+    - Session timeout after inactivity
+    - Rate limiting with escalating delays
     """
     blob = get_encrypted_blob()
 
@@ -109,39 +166,42 @@ def unlock_gate():
     if not blob:
         return True
 
-    # Already unlocked this session
-    if st.session_state.get("unlocked"):
+    # Check session timeout
+    if not _check_session_timeout():
+        st.warning("Session expired due to inactivity. Please log in again.")
+
+    # Already unlocked (secrets exist in session state)
+    if st.session_state.get("secrets"):
+        _update_activity()
         return True
 
-    # Show only password field - no title, no sidebar, nothing
-    st.text_input(
-        "Password",
-        type="password",
-        key="unlock_password",
-        on_change=_try_unlock,
-    )
+    # Check if locked out
+    lockout_remaining = _get_lockout_remaining()
+    if lockout_remaining > 0:
+        st.error(f"Too many failed attempts. Please wait {int(lockout_remaining)} seconds.")
+        st.stop()
 
-    if st.session_state.get("unlock_error"):
-        st.error(st.session_state.unlock_error)
+    # Use a form so password is submitted but not stored in session state
+    with st.form("unlock_form", clear_on_submit=True):
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Unlock")
+
+        if submitted and password:
+            secrets, error = try_decrypt_secrets(blob, password)
+            if secrets is not None:
+                st.session_state.secrets = secrets
+                _update_activity()
+                _clear_failed_attempts()
+                st.rerun()
+            else:
+                _record_failed_attempt()
+                lockout = _get_lockout_remaining()
+                if lockout > 0:
+                    st.error(f"{error} Please wait {int(lockout)} seconds before trying again.")
+                else:
+                    st.error(error)
 
     return False
-
-
-def _try_unlock():
-    """Callback to attempt unlock."""
-    blob = get_encrypted_blob()
-    password = st.session_state.get("unlock_password", "")
-
-    if not password:
-        return
-
-    secrets, error = try_decrypt_secrets(blob, password)
-    if secrets is not None:
-        st.session_state.unlocked = True
-        st.session_state.secrets = secrets
-        st.session_state.unlock_error = None
-    else:
-        st.session_state.unlock_error = error
 
 
 def get_secrets() -> dict:
@@ -218,15 +278,18 @@ def secrets_page():
 
     st.markdown("Edit secrets below, then encrypt with a password.")
 
+    # All secret fields are hidden by default for security
     test_secret = st.text_input(
         "Test Secret",
         value=current.get("test_secret", ""),
+        type="password",
         key="test_secret",
     )
 
     qbo_client_id = st.text_input(
         "QuickBooks Client ID",
         value=current.get("qbo_client_id", ""),
+        type="password",
         key="qbo_client_id",
     )
 
@@ -241,6 +304,8 @@ def secrets_page():
     if current.get("google_service_account"):
         google_sa_default = json.dumps(current["google_service_account"], indent=2)
 
+    # Note: text_area doesn't support type="password", but the value is still
+    # pre-populated from session state (not visible in page source until rendered)
     google_sa_input = st.text_area(
         "Google Service Account JSON",
         value=google_sa_default,
@@ -306,7 +371,17 @@ def config_page():
     """Config page displaying session state for debugging."""
     st.title("Config")
     st.markdown("Current session state variables:")
-    st.json(dict(st.session_state))
+
+    # Filter out sensitive data from display
+    SENSITIVE_KEYS = {"secrets", "unlock_password"}
+    safe_state = {}
+    for key, value in st.session_state.items():
+        if key in SENSITIVE_KEYS:
+            safe_state[key] = "[REDACTED]"
+        else:
+            safe_state[key] = value
+
+    st.json(safe_state)
 
 
 def main():
