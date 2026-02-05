@@ -1,10 +1,10 @@
 # The Land — Month-End Workflow
 
-This document describes Ross's current workflow and what we want to automate.
+This document describes your current workflow and what we want to automate.
 It is rendered step-by-step by the Streamlit app.
 
 Assumption:
-- Ross continues to manually sync QuickBooks bank feeds.
+- You continue to manually sync QuickBooks bank feeds.
 - Everything after that is deterministic and automatable.
 
 ---
@@ -12,7 +12,7 @@ Assumption:
 ## Step 1: Sync bank transactions in QuickBooks (manual)
 
 ### What happens
-Ross logs into QuickBooks Online and refreshes the bank feed so the latest transactions appear.
+Log into QuickBooks Online and refresh the bank feed so the latest transactions appear.
 
 ### Why this is manual
 QuickBooks bank-feed "for review" transactions are not reliably accessible via API.
@@ -31,7 +31,7 @@ None (QuickBooks UI only)
 
 ### What happens
 QuickBooks AI + rules usually categorize transactions correctly.
-Ross fixes anything unusual.
+Fix anything unusual.
 
 ### Future automation
 - Pull posted transactions via API
@@ -46,7 +46,7 @@ QuickBooks Online API (Intuit OAuth)
 ## Step 3: Split loan payment into principal and interest
 
 ### What happens today
-Ross logs into the lender's site every month to check the amortization breakdown.
+Log into the lender's site every month to check the amortization breakdown.
 
 ### What we want
 - Store the amortization schedule once
@@ -54,7 +54,7 @@ Ross logs into the lender's site every month to check the amortization breakdown
 - Create correct accounting guidance or entries
 
 ### Implementation modes
-- Assist + match (preferred): create split entry, Ross matches bank feed
+- Assist + match (preferred): create split entry, you match bank feed
 - Reporting-only: adjust exported data without touching books
 
 ### Credentials required
@@ -85,7 +85,7 @@ QuickBooks Online API (OAuth)
 ## Step 5: Update Google Sheets with latest month
 
 ### What happens today
-Ross copy-pastes values from Excel exports into Google Sheets.
+Copy-paste values from Excel exports into Google Sheets.
 
 ### What we automate
 - Write values directly to Google Sheets via API
@@ -96,14 +96,14 @@ Google Sheets API
 
 Authentication options:
 - Service account (recommended)
-- OAuth as Ross
+- User OAuth
 
 ---
 
 ## Step 6: Refresh projections / formulas
 
 ### What happens today
-Ross drags formulas forward to replace projections with actuals.
+Drag formulas forward to replace projections with actuals.
 
 ### Automation options
 - Sheets API formula copy
@@ -117,7 +117,7 @@ Google Sheets API
 ## Step 7: Review variances and decide on reforecasting
 
 ### What happens
-Ross analyzes actuals vs projections and plans capital calls.
+Analyze actuals vs projections and plan capital calls.
 
 ### What software can help with
 - Variance summaries
