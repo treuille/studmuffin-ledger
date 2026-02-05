@@ -46,14 +46,22 @@ def parse_steps(md: str):
 
     ## Step 2: Title
     Body...
+
+    Only numbered steps (## Step N: ...) are extracted.
+    The intro/meta content at the top is ignored since we use st.title().
     """
     lines = md.splitlines()
-    step_idxs = [i for i, l in enumerate(lines) if l.startswith("## Step")]
+    # Only match numbered steps like "## Step 1:", "## Step 2:", etc.
+    step_idxs = [
+        i for i, l in enumerate(lines) if re.match(r"## Step \d+:", l)
+    ]
 
-    intro = "\n".join(lines[: step_idxs[0]]).strip() if step_idxs else md
+    # No intro - we use st.title() for the heading and skip meta content
+    intro = ""
 
     steps = []
     for i, start in enumerate(step_idxs):
+        # End at the next step header or end of file
         end = step_idxs[i + 1] if i + 1 < len(step_idxs) else len(lines)
         header = lines[start]
         body = "\n".join(lines[start + 1 : end]).strip()
@@ -163,6 +171,16 @@ Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encry
     # Use decrypted secrets as defaults, or empty
     current = st.session_state.decrypted_secrets or {}
 
+    # Debug/test secret (any string)
+    test_secret = st.text_input(
+        "Test Secret (any string)",
+        value=current.get("test_secret", ""),
+        key="test_secret",
+        help="For testing encryption. Set to any value.",
+    )
+
+    st.divider()
+
     qbo_client_id = st.text_input(
         "QuickBooks Client ID",
         value=current.get("qbo_client_id", ""),
@@ -228,6 +246,8 @@ Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encry
         else:
             # Build secrets dict
             new_secrets = {}
+            if test_secret:
+                new_secrets["test_secret"] = test_secret
             if qbo_client_id:
                 new_secrets["qbo_client_id"] = qbo_client_id
             if qbo_client_secret:

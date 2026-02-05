@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "exa": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["-c", "EXA_API_KEY=$(cat /home/adrien/dauphin/secrets/exa_token) exec npx -y exa-mcp-server tools=web_search_exa,crawling_exa"]
+    }
+  }
+}
