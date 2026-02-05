@@ -307,7 +307,7 @@ def config_page():
 def main():
     st.set_page_config(
         page_title="The Land — Month-End",
-        page_icon=":material/landscape:",
+        page_icon="stud-muffin.jpg",
         layout="wide",
     )
 
