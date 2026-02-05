@@ -166,9 +166,18 @@ def workflow_page():
     for step in steps:
         is_active = step.number == st.session_state.active_step
         is_future = step.number > st.session_state.active_step
+        is_completed = step.number < st.session_state.active_step
+
+        # Choose icon based on state
+        if is_completed:
+            display_icon = ":material/check_circle:"
+        elif is_future:
+            display_icon = ":material/lock:"
+        else:
+            display_icon = step.icon
 
         with st.expander(
-            f"{step.icon} Step {step.number}: {step.title}",
+            f"{display_icon} Step {step.number}: {step.title}",
             expanded=is_active,
         ):
             if is_future:
@@ -183,6 +192,15 @@ def workflow_page():
                         icon=":material/check:",
                         on_click=lambda n=step.number: setattr(
                             st.session_state, "active_step", n + 1
+                        ),
+                    )
+                elif is_completed:
+                    st.button(
+                        "Return to this step",
+                        key=f"return_{step.number}",
+                        icon=":material/undo:",
+                        on_click=lambda n=step.number: setattr(
+                            st.session_state, "active_step", n
                         ),
                     )
 
