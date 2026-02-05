@@ -204,6 +204,11 @@ def workflow_page():
                         ),
                     )
 
+    # Celebration when all steps are done
+    if steps and st.session_state.active_step > len(steps):
+        st.balloons()
+        st.success("Congrats, you did it! Go Muffin! 🧁")
+
 
 def secrets_page():
     """Secrets management page."""
