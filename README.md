@@ -1,20 +1,23 @@
-# studmuffin-ledger
-Financial automation for the studmuffin
+# The Land — Month-End Workflow (Skeleton)
 
-## Setup
+This repository contains a **Streamlit skeleton app** that walks through
+Ross's month-end QuickBooks → Google Sheets workflow.
 
-Install the dependencies:
+Nothing is automated yet.
+This is a **discussion and alignment tool**.
 
+## Files
+- `streamlit_app.py` — Streamlit app (guided checklist)
+- `workflow_steps.md` — workflow + credential requirements
+- `AGENT_INSTRUCTIONS.md` — engineering plan
+
+## Run locally
 ```bash
-pip install -e .
-```
-
-## Running the App
-
-Run the Streamlit app:
-
-```bash
+pip install streamlit
 streamlit run streamlit_app.py
 ```
 
-The app will open in your browser at http://localhost:8501
+## Deployment
+
+Intended for Streamlit Community Cloud, backed by a GitHub repo.
+Secrets will be added later once APIs are wired.

@@ -1,0 +1,146 @@
+# The Land — Month-End Workflow
+
+This document describes Ross's current workflow and what we want to automate.
+It is rendered step-by-step by the Streamlit app.
+
+Assumption:
+- Ross continues to manually sync QuickBooks bank feeds.
+- Everything after that is deterministic and automatable.
+
+---
+
+## Step 1: Sync bank transactions in QuickBooks (manual)
+
+### What happens
+Ross logs into QuickBooks Online and refreshes the bank feed so the latest transactions appear.
+
+### Why this is manual
+QuickBooks bank-feed "for review" transactions are not reliably accessible via API.
+We treat this as the human "commit" step.
+
+### Automation options (later)
+- Post-sync validation and exception flagging
+- Full replacement of bank feeds using a bank aggregator (higher risk, not MVP)
+
+### Credentials required
+None (QuickBooks UI only)
+
+---
+
+## Step 2: (Optional) Review or fix transaction coding
+
+### What happens
+QuickBooks AI + rules usually categorize transactions correctly.
+Ross fixes anything unusual.
+
+### Future automation
+- Pull posted transactions via API
+- Flag anomalies (uncategorized, vendor mismatch, unusual accounts)
+- Offer one-click fixes
+
+### Credentials required
+QuickBooks Online API (Intuit OAuth)
+
+---
+
+## Step 3: Split loan payment into principal and interest
+
+### What happens today
+Ross logs into the lender's site every month to check the amortization breakdown.
+
+### What we want
+- Store the amortization schedule once
+- Automatically compute monthly principal vs interest
+- Create correct accounting guidance or entries
+
+### Implementation modes
+- Assist + match (preferred): create split entry, Ross matches bank feed
+- Reporting-only: adjust exported data without touching books
+
+### Credentials required
+QuickBooks Online API
+
+### Data required
+One-time amortization schedule (CSV or loan parameters)
+
+---
+
+## Step 4: Pull month-end reports from QuickBooks
+
+### Reports
+- Profit & Loss
+- Balance Sheet
+- Statement of Cash Flows
+
+### What we automate
+- Fetch reports via QuickBooks Reports API
+- Receive structured JSON
+- Normalize to a standard internal format
+
+### Credentials required
+QuickBooks Online API (OAuth)
+
+---
+
+## Step 5: Update Google Sheets with latest month
+
+### What happens today
+Ross copy-pastes values from Excel exports into Google Sheets.
+
+### What we automate
+- Write values directly to Google Sheets via API
+- Use batch updates for atomic writes
+
+### Credentials required
+Google Sheets API
+
+Authentication options:
+- Service account (recommended)
+- OAuth as Ross
+
+---
+
+## Step 6: Refresh projections / formulas
+
+### What happens today
+Ross drags formulas forward to replace projections with actuals.
+
+### Automation options
+- Sheets API formula copy
+- Sheet redesign to eliminate dragging entirely
+
+### Credentials required
+Google Sheets API
+
+---
+
+## Step 7: Review variances and decide on reforecasting
+
+### What happens
+Ross analyzes actuals vs projections and plans capital calls.
+
+### What software can help with
+- Variance summaries
+- Cash runway alerts
+- Scenario toggles
+
+### Credentials required
+None beyond previous steps
+
+---
+
+## Credential Summary
+
+### QuickBooks (Intuit)
+- Client ID
+- Client Secret
+- OAuth redirect URI
+- Persistent token storage (refresh tokens rotate)
+
+### Google Sheets
+- Service account JSON key OR OAuth credentials
+- Sheet ID and tab mappings
+
+### Hosting
+- Streamlit Community Cloud (GitHub-backed deployment)
+- Secrets configured in hosting UI
