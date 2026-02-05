@@ -205,9 +205,9 @@ def workflow_page():
                     )
 
 
-def config_page():
-    """Configuration page for managing secrets."""
-    st.title("Configuration")
+def secrets_page():
+    """Secrets management page."""
+    st.title("Secrets")
 
     current = get_secrets()
 
@@ -297,6 +297,13 @@ def config_page():
             st.code(f'encrypted_secrets = "{encrypted}"', language="toml")
 
 
+def config_page():
+    """Config page displaying session state for debugging."""
+    st.title("Config")
+    st.markdown("Current session state variables:")
+    st.json(dict(st.session_state))
+
+
 def main():
     st.set_page_config(
         page_title="The Land — Month-End",
@@ -315,6 +322,11 @@ def main():
         icon=":material/checklist:",
         default=True,
     )
+    secrets = st.Page(
+        secrets_page,
+        title="Secrets",
+        icon=":material/key:",
+    )
     config = st.Page(
         config_page,
         title="Config",
@@ -322,7 +334,7 @@ def main():
     )
 
     # Navigation
-    nav = st.navigation([workflow, config])
+    nav = st.navigation([workflow, secrets, config])
     nav.run()
 
 
