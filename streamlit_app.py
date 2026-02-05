@@ -171,8 +171,10 @@ def workflow_page():
         if is_active:
             st.markdown(step.body)
             st.button(
-                "Next step",
+                "Mark Complete & Continue",
                 key=f"next_{step.number}",
+                type="primary",
+                icon=":material/check:",
                 on_click=lambda n=step.number: setattr(
                     st.session_state, "active_step", n + 1
                 ),
@@ -182,8 +184,6 @@ def workflow_page():
                 st.markdown(step.body)
         else:
             st.caption("This step will unlock once you complete the previous step.")
-
-        st.divider()
 
 
 def config_page():
