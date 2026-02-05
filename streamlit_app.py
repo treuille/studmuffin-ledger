@@ -70,6 +70,8 @@ def parse_steps(md: str):
         end = step_idxs[i + 1] if i + 1 < len(step_idxs) else len(lines)
         header = lines[start]
         body = "\n".join(lines[start + 1 : end]).strip()
+        # Remove trailing horizontal rules from markdown
+        body = body.rstrip("-").rstrip()
 
         m = re.match(r"## Step (\d+): (.+)", header)
         if not m:
@@ -165,8 +167,8 @@ def workflow_page():
         is_active = step.number == st.session_state.active_step
         is_future = step.number > st.session_state.active_step
 
-        # Step header with icon
-        st.subheader(f"{step.icon} Step {step.number}: {step.title}")
+        # Step header with icon (use header for larger size than ### subsections)
+        st.header(f"{step.icon} Step {step.number}: {step.title}")
 
         if is_active:
             st.markdown(step.body)
