@@ -1,0 +1,13 @@
+[project]
+name = "studmuffin-ledger"
+version = "0.1.0"
+description = "Financial automation for the studmuffin"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "streamlit>=1.28.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
