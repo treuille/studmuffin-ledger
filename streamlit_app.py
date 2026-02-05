@@ -51,17 +51,14 @@ def parse_steps(md: str):
     The intro/meta content at the top is ignored since we use st.title().
     """
     lines = md.splitlines()
-    # Only match numbered steps like "## Step 1:", "## Step 2:", etc.
     step_idxs = [
         i for i, l in enumerate(lines) if re.match(r"## Step \d+:", l)
     ]
 
-    # No intro - we use st.title() for the heading and skip meta content
     intro = ""
 
     steps = []
     for i, start in enumerate(step_idxs):
-        # End at the next step header or end of file
         end = step_idxs[i + 1] if i + 1 < len(step_idxs) else len(lines)
         header = lines[start]
         body = "\n".join(lines[start + 1 : end]).strip()
@@ -87,6 +84,57 @@ def get_encrypted_blob() -> str | None:
         return st.secrets.get("encrypted_secrets")
     except Exception:
         return None
+
+
+def unlock_gate():
+    """
+    Password gate. Shows only a password field, nothing else.
+    Returns True if unlocked, False if still locked.
+    """
+    blob = get_encrypted_blob()
+
+    # No secrets configured - no gate needed
+    if not blob:
+        return True
+
+    # Already unlocked this session
+    if st.session_state.get("unlocked"):
+        return True
+
+    # Show only password field - no title, no sidebar, nothing
+    st.text_input(
+        "Password",
+        type="password",
+        key="unlock_password",
+        on_change=_try_unlock,
+    )
+
+    if st.session_state.get("unlock_error"):
+        st.error(st.session_state.unlock_error)
+
+    return False
+
+
+def _try_unlock():
+    """Callback to attempt unlock."""
+    blob = get_encrypted_blob()
+    password = st.session_state.get("unlock_password", "")
+
+    if not password:
+        return
+
+    secrets, error = try_decrypt_secrets(blob, password)
+    if secrets is not None:
+        st.session_state.unlocked = True
+        st.session_state.secrets = secrets
+        st.session_state.unlock_error = None
+    else:
+        st.session_state.unlock_error = error
+
+
+def get_secrets() -> dict:
+    """Get decrypted secrets from session state, or empty dict."""
+    return st.session_state.get("secrets") or {}
 
 
 def workflow_page(intro, steps):
@@ -129,57 +177,16 @@ def workflow_page(intro, steps):
 def config_page():
     st.title("Config")
 
-    blob = get_encrypted_blob()
-    has_secrets = bool(blob)
+    current = get_secrets()
 
-    st.markdown(
-        """
-Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encrypt.
-"""
-    )
+    st.markdown("Edit secrets below, then encrypt with a password.")
 
-    # Initialize form state
-    if "decrypted_secrets" not in st.session_state:
-        st.session_state.decrypted_secrets = None
-    if "decrypt_error" not in st.session_state:
-        st.session_state.decrypt_error = None
-
-    # Decrypt section (only if blob exists)
-    if has_secrets and st.session_state.decrypted_secrets is None:
-        st.subheader("Decrypt Existing Secrets")
-
-        with st.form("decrypt_form"):
-            decrypt_password = st.text_input("Current Password", type="password")
-            if st.form_submit_button("Decrypt"):
-                secrets, error = try_decrypt_secrets(blob, decrypt_password)
-                if secrets is not None:
-                    st.session_state.decrypted_secrets = secrets
-                    st.session_state.decrypt_error = None
-                    st.rerun()
-                else:
-                    st.session_state.decrypt_error = error
-
-        if st.session_state.decrypt_error:
-            st.error(st.session_state.decrypt_error)
-
-        st.divider()
-        st.markdown("**Or start fresh:**")
-
-    # Edit section
-    st.subheader("Edit Secrets")
-
-    # Use decrypted secrets as defaults, or empty
-    current = st.session_state.decrypted_secrets or {}
-
-    # Debug/test secret (any string)
+    # All secrets - no special treatment
     test_secret = st.text_input(
-        "Test Secret (any string)",
+        "Test Secret",
         value=current.get("test_secret", ""),
         key="test_secret",
-        help="For testing encryption. Set to any value.",
     )
-
-    st.divider()
 
     qbo_client_id = st.text_input(
         "QuickBooks Client ID",
@@ -194,13 +201,12 @@ Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encry
         key="qbo_client_secret",
     )
 
-    st.markdown("**Google Service Account JSON**")
     google_sa_default = ""
     if current.get("google_service_account"):
         google_sa_default = json.dumps(current["google_service_account"], indent=2)
 
     google_sa_input = st.text_area(
-        "Paste the full JSON content",
+        "Google Service Account JSON",
         value=google_sa_default,
         height=150,
         key="google_sa",
@@ -214,7 +220,6 @@ Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encry
         "Password",
         type="password",
         key="new_password",
-        help="This password will be required to decrypt secrets later",
     )
     confirm_password = st.text_input(
         "Confirm Password",
@@ -255,29 +260,20 @@ Secrets are stored encrypted. Enter your password to decrypt, edit, and re-encry
             if google_sa:
                 new_secrets["google_service_account"] = google_sa
 
-            # Encrypt (even if empty - user might want to clear secrets)
             encrypted = encrypt_secrets(new_secrets, new_password)
 
             st.success("Secrets encrypted!")
-
-            st.markdown("**Copy this into your secrets.toml or Community Cloud secrets:**")
             st.code(f'encrypted_secrets = "{encrypted}"', language="toml")
-
-            # Clear decrypted state
-            st.session_state.decrypted_secrets = None
-
-    # Debug section
-    with st.expander("Debug Info"):
-        st.json({
-            "has_encrypted_blob": has_secrets,
-            "secrets_decrypted": st.session_state.decrypted_secrets is not None,
-            "active_step": st.session_state.get("active_step"),
-        })
 
 
 def main():
     st.set_page_config(page_title="The Land — Month-End", layout="wide")
 
+    # Gate: if secrets exist, require password first
+    if not unlock_gate():
+        st.stop()
+
+    # App is unlocked - show sidebar and pages
     page = st.sidebar.radio("Page", ["Workflow", "Config"])
 
     md = load_markdown()
