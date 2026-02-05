@@ -3,13 +3,9 @@
 # The Land — Month-End Workflow
 #
 # Design goals:
-# - Single-page, top-to-bottom guided checklist
+# - Multipage app with elegant navigation
 # - Password-protected secrets (encrypted at rest, decrypted transiently)
 # - Content is driven entirely by workflow_steps.md
-#
-# Pages:
-# - Workflow (guided steps)
-# - Config (secrets management)
 
 from pathlib import Path
 from dataclasses import dataclass
@@ -21,12 +17,24 @@ from secrets_manager import encrypt_secrets, try_decrypt_secrets
 
 WORKFLOW_MD = Path(__file__).parent / "workflow_steps.md"
 
+# Icons for each step (Material icons)
+STEP_ICONS = {
+    1: ":material/sync:",
+    2: ":material/edit_note:",
+    3: ":material/call_split:",
+    4: ":material/summarize:",
+    5: ":material/table_chart:",
+    6: ":material/refresh:",
+    7: ":material/analytics:",
+}
+
 
 @dataclass
 class Step:
     number: int
     title: str
     body: str
+    icon: str = ""
 
 
 def load_markdown() -> str:
@@ -67,11 +75,13 @@ def parse_steps(md: str):
         if not m:
             continue
 
+        step_num = int(m.group(1))
         steps.append(
             Step(
-                number=int(m.group(1)),
+                number=step_num,
                 title=m.group(2),
                 body=body,
+                icon=STEP_ICONS.get(step_num, ":material/check_circle:"),
             )
         )
 
@@ -137,8 +147,12 @@ def get_secrets() -> dict:
     return st.session_state.get("secrets") or {}
 
 
-def workflow_page(intro, steps):
-    st.title("The Land — Month-End Workflow")
+def workflow_page():
+    """Main workflow page with step-by-step checklist."""
+    md = load_markdown()
+    intro, steps = parse_steps(md)
+
+    st.title("Month-End Workflow")
 
     if "active_step" not in st.session_state:
         st.session_state.active_step = 1
@@ -151,7 +165,8 @@ def workflow_page(intro, steps):
         is_active = step.number == st.session_state.active_step
         is_future = step.number > st.session_state.active_step
 
-        st.subheader(f"Step {step.number}: {step.title}")
+        # Step header with icon
+        st.subheader(f"{step.icon} Step {step.number}: {step.title}")
 
         if is_active:
             st.markdown(step.body)
@@ -166,22 +181,19 @@ def workflow_page(intro, steps):
             with st.expander("Show details"):
                 st.markdown(step.body)
         else:
-            st.markdown(
-                "<span style='color: #999'>This step will unlock once you complete the previous step.</span>",
-                unsafe_allow_html=True,
-            )
+            st.caption("This step will unlock once you complete the previous step.")
 
         st.divider()
 
 
 def config_page():
-    st.title("Config")
+    """Configuration page for managing secrets."""
+    st.title("Configuration")
 
     current = get_secrets()
 
     st.markdown("Edit secrets below, then encrypt with a password.")
 
-    # All secrets - no special treatment
     test_secret = st.text_input(
         "Test Secret",
         value=current.get("test_secret", ""),
@@ -267,22 +279,32 @@ def config_page():
 
 
 def main():
-    st.set_page_config(page_title="The Land — Month-End", layout="wide")
+    st.set_page_config(
+        page_title="The Land — Month-End",
+        page_icon=":material/landscape:",
+        layout="wide",
+    )
 
     # Gate: if secrets exist, require password first
     if not unlock_gate():
         st.stop()
 
-    # App is unlocked - show sidebar and pages
-    page = st.sidebar.radio("Page", ["Workflow", "Config"])
+    # Define pages with icons
+    workflow = st.Page(
+        workflow_page,
+        title="Workflow",
+        icon=":material/checklist:",
+        default=True,
+    )
+    config = st.Page(
+        config_page,
+        title="Config",
+        icon=":material/settings:",
+    )
 
-    md = load_markdown()
-    intro, steps = parse_steps(md)
-
-    if page == "Config":
-        config_page()
-    else:
-        workflow_page(intro, steps)
+    # Navigation
+    nav = st.navigation([workflow, config])
+    nav.run()
 
 
 if __name__ == "__main__":
