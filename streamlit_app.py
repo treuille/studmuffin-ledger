@@ -217,6 +217,11 @@ REPORT_TYPES = [
 ]
 
 
+def _all_reports_uploaded() -> bool:
+    """Return True if all three QuickBooks report CSVs are in session state."""
+    return all(f"df_{key}" in st.session_state for key, _ in REPORT_TYPES)
+
+
 def render_step_2_uploads():
     """Show three CSV uploaders for QuickBooks reports with inline previews."""
     for key, label in REPORT_TYPES:
@@ -226,8 +231,11 @@ def render_step_2_uploads():
             key=f"upload_{key}",
         )
         if uploaded is not None:
-            df = pd.read_csv(uploaded)
-            st.session_state[f"df_{key}"] = df
+            try:
+                df = pd.read_csv(uploaded)
+                st.session_state[f"df_{key}"] = df
+            except Exception as e:
+                st.error(f"Could not read {label} CSV: {e}")
         if f"df_{key}" in st.session_state:
             st.dataframe(st.session_state[f"df_{key}"])
 
@@ -270,15 +278,23 @@ def workflow_page():
                 if is_active and step.number == 2:
                     render_step_2_uploads()
                 if is_active:
+                    disabled = (
+                        step.number == 2 and not _all_reports_uploaded()
+                    )
                     st.button(
                         "Mark Complete & Continue",
                         key=f"next_{step.number}",
                         type="primary",
                         icon=":material/check:",
+                        disabled=disabled,
                         on_click=lambda n=step.number: setattr(
                             st.session_state, "active_step", n + 1
                         ),
                     )
+                    if disabled:
+                        st.caption(
+                            "Upload all three reports to continue."
+                        )
                 elif is_completed:
                     st.button(
                         "Return to this step",
