@@ -231,21 +231,26 @@ def _read_upload(uploaded) -> pd.DataFrame:
 
 
 def render_step_2_uploads():
-    """Show file uploaders for QuickBooks reports with inline previews."""
+    """Show file uploaders side-by-side, previews stacked below."""
+    cols = st.columns(len(REPORT_TYPES))
+    for col, (key, label) in zip(cols, REPORT_TYPES):
+        with col:
+            uploaded = st.file_uploader(
+                f"LV Capital Holdings {label}",
+                type=["csv", "xls", "xlsx"],
+                key=f"upload_{key}",
+            )
+            if uploaded is not None:
+                try:
+                    df = _read_upload(uploaded)
+                    st.session_state[f"df_{key}"] = df
+                except Exception as e:
+                    st.error(f"Could not read {label} file: {e}")
+
     for key, label in REPORT_TYPES:
-        uploaded = st.file_uploader(
-            f"LV Capital Holdings {label}",
-            type=["csv", "xls", "xlsx"],
-            key=f"upload_{key}",
-        )
-        if uploaded is not None:
-            try:
-                df = _read_upload(uploaded)
-                st.session_state[f"df_{key}"] = df
-            except Exception as e:
-                st.error(f"Could not read {label} file: {e}")
         if f"df_{key}" in st.session_state:
-            st.dataframe(st.session_state[f"df_{key}"])
+            st.subheader(label)
+            st.dataframe(st.session_state[f"df_{key}"], use_container_width=True)
 
 
 def workflow_page():
