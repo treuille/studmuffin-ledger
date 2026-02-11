@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import json
 import re
 import time
+import pandas as pd
 import streamlit as st
 
 from secrets_manager import encrypt_secrets, try_decrypt_secrets
@@ -25,7 +26,7 @@ LOCKOUT_DELAYS = [0, 0, 5, 15, 30, 60]  # Escalating delays after failed attempt
 # Icons for each step (Material icons)
 STEP_ICONS = {
     1: ":material/sync:",
-    2: ":material/edit_note:",
+    2: ":material/upload_file:",
     3: ":material/call_split:",
     4: ":material/summarize:",
     5: ":material/table_chart:",
@@ -209,6 +210,28 @@ def get_secrets() -> dict:
     return st.session_state.get("secrets") or {}
 
 
+REPORT_TYPES = [
+    ("balance_sheet", "Balance Sheet"),
+    ("cash_flows", "Cash Flows"),
+    ("profit_and_loss", "Profit and Loss"),
+]
+
+
+def render_step_2_uploads():
+    """Show three CSV uploaders for QuickBooks reports with inline previews."""
+    for key, label in REPORT_TYPES:
+        uploaded = st.file_uploader(
+            f"LV Capital Holdings {label}",
+            type=["csv"],
+            key=f"upload_{key}",
+        )
+        if uploaded is not None:
+            df = pd.read_csv(uploaded)
+            st.session_state[f"df_{key}"] = df
+        if f"df_{key}" in st.session_state:
+            st.dataframe(st.session_state[f"df_{key}"])
+
+
 def workflow_page():
     """Main workflow page with step-by-step checklist."""
     md = load_markdown()
@@ -244,6 +267,8 @@ def workflow_page():
                 st.caption("This step will unlock once you complete the previous step.")
             else:
                 st.markdown(step.body)
+                if is_active and step.number == 2:
+                    render_step_2_uploads()
                 if is_active:
                     st.button(
                         "Mark Complete & Continue",

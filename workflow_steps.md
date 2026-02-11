@@ -27,19 +27,24 @@ None (QuickBooks UI only)
 
 ---
 
-## Step 2: (Optional) Review or fix transaction coding
+## Step 2: Upload QuickBooks reports
 
 ### What happens
-QuickBooks AI + rules usually categorize transactions correctly.
-Fix anything unusual.
+Export and upload three QuickBooks report CSVs (in any order):
 
-### Future automation
-- Pull posted transactions via API
-- Flag anomalies (uncategorized, vendor mismatch, unusual accounts)
-- Offer one-click fixes
+1. **LV Capital Holdings Balance Sheet**
+2. **LV Capital Holdings Cash Flows**
+3. **LV Capital Holdings Profit and Loss**
+
+Each file is previewed inline after upload.
+
+### Why CSVs instead of API
+QuickBooks' transaction categorization AI is good enough that we don't need
+to automate review/fix of transaction coding. Exporting these three reports
+manually is fast and avoids OAuth complexity for MVP.
 
 ### Credentials required
-QuickBooks Online API (Intuit OAuth)
+None (manual CSV export from QuickBooks UI)
 
 ---
 
