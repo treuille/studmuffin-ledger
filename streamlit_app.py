@@ -222,20 +222,28 @@ def _all_reports_uploaded() -> bool:
     return all(f"df_{key}" in st.session_state for key, _ in REPORT_TYPES)
 
 
+def _read_upload(uploaded) -> pd.DataFrame:
+    """Read a CSV or Excel upload into a DataFrame."""
+    name = uploaded.name.lower()
+    if name.endswith(".csv"):
+        return pd.read_csv(uploaded)
+    return pd.read_excel(uploaded)
+
+
 def render_step_2_uploads():
-    """Show three CSV uploaders for QuickBooks reports with inline previews."""
+    """Show file uploaders for QuickBooks reports with inline previews."""
     for key, label in REPORT_TYPES:
         uploaded = st.file_uploader(
             f"LV Capital Holdings {label}",
-            type=["csv"],
+            type=["csv", "xls", "xlsx"],
             key=f"upload_{key}",
         )
         if uploaded is not None:
             try:
-                df = pd.read_csv(uploaded)
+                df = _read_upload(uploaded)
                 st.session_state[f"df_{key}"] = df
             except Exception as e:
-                st.error(f"Could not read {label} CSV: {e}")
+                st.error(f"Could not read {label} file: {e}")
         if f"df_{key}" in st.session_state:
             st.dataframe(st.session_state[f"df_{key}"])
 
